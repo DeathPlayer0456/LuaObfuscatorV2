@@ -1,6 +1,8 @@
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 require("dotenv").config();
 
 const app = express();
@@ -13,60 +15,70 @@ const PORT = process.env.PORT || 3000;
 // ─── Serve frontend ───
 app.use(express.static(__dirname + "/public"));
 
-// ─── GET all files in a GitHub repo (recursive tree) ───
-// Query: ?owner=PY44N&repo=LuaObfuscatorV2&branch=main
-app.get("/api/repo-files", async (req, res) => {
-  try {
-    const { owner, repo, branch } = req.query;
-    if (!owner || !repo) {
-      return res.status(400).json({ error: "Missing owner or repo" });
+// ─── Helper: Recursively get all files in directory ───
+function getAllFiles(dirPath, arrayOfFiles = [], baseDir = dirPath) {
+  const files = fs.readdirSync(dirPath);
+
+  files.forEach(file => {
+    const fullPath = path.join(dirPath, file);
+    
+    // Skip certain directories
+    const skipDirs = ["node_modules", ".git", "public", ".vscode", ".github"];
+    if (fs.statSync(fullPath).isDirectory()) {
+      if (!skipDirs.includes(file)) {
+        arrayOfFiles = getAllFiles(fullPath, arrayOfFiles, baseDir);
+      }
+    } else {
+      // Skip hidden files and certain files
+      const skipFiles = [".env", ".env.example", "package-lock.json", ".gitignore", ".DS_Store"];
+      if (!file.startsWith(".") && !skipFiles.includes(file)) {
+        const relativePath = path.relative(baseDir, fullPath);
+        const stats = fs.statSync(fullPath);
+        arrayOfFiles.push({
+          path: relativePath.replace(/\\/g, "/"), // normalize path separators
+          size: stats.size
+        });
+      }
     }
+  });
 
-    const branchName = branch || "main";
+  return arrayOfFiles;
+}
 
-    // GitHub API: get the full recursive tree
-    const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branchName}?recursive=1`;
-    const response = await axios.get(url, {
-      headers: { "User-Agent": "LuaPure-App" }
-    });
-
-    // Filter only files (not directories), skip huge/binary files
-    const files = response.data.tree
-      .filter(item => item.type === "file")
-      .filter(item => item.size < 500000) // skip files > 500KB
-      .map(item => ({
-        path: item.path,
-        size: item.size,
-        sha: item.sha
-      }));
-
-    res.json({ files, total: files.length });
+// ─── GET all files in the repo (local filesystem) ───
+app.get("/api/repo-files", (req, res) => {
+  try {
+    const repoDir = __dirname; // the root of the repo
+    const files = getAllFiles(repoDir);
+    
+    // Filter out huge files
+    const filtered = files.filter(f => f.size < 500000);
+    
+    res.json({ files: filtered, total: filtered.length });
   } catch (err) {
-    const msg = err.response?.data?.message || err.message;
-    res.status(err.response?.status || 500).json({ error: msg });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// ─── GET single file content from GitHub ───
-// Query: ?owner=PY44N&repo=LuaObfuscatorV2&path=src/main.rs
-app.get("/api/file-content", async (req, res) => {
+// ─── GET single file content (local filesystem) ───
+app.get("/api/file-content", (req, res) => {
   try {
-    const { owner, repo, path } = req.query;
-    if (!owner || !repo || !path) {
-      return res.status(400).json({ error: "Missing owner, repo, or path" });
+    const { path: filePath } = req.query;
+    if (!filePath) {
+      return res.status(400).json({ error: "Missing path" });
     }
 
-    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-    const response = await axios.get(url, {
-      headers: { "User-Agent": "LuaPure-App" }
-    });
+    const fullPath = path.join(__dirname, filePath);
+    
+    // Security check: make sure path is within repo
+    if (!fullPath.startsWith(__dirname)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
-    // GitHub returns base64 encoded content
-    const content = Buffer.from(response.data.content, "base64").toString("utf-8");
-    res.json({ content, path });
+    const content = fs.readFileSync(fullPath, "utf-8");
+    res.json({ content, path: filePath });
   } catch (err) {
-    const msg = err.response?.data?.message || err.message;
-    res.status(err.response?.status || 500).json({ error: msg });
+    res.status(500).json({ error: err.message });
   }
 });
 
