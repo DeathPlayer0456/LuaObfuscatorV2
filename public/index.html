@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LuaPure — AI Lua Converter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.1.1/FileSaver.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;700&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap');
+
+:root {
+  --bg: #07080e;
+  --bg-card: #0e0f18;
+  --bg-input: #0a0b14;
+  --accent: #00e5ff;
+  --accent-glow: #00e5ff22;
+  --accent2: #7c4dff;
+  --text: #c8d6e5;
+  --text-dim: #4a5568;
+  --success: #00e676;
+  --warning: #ffab40;
+  --error: #ff5252;
+  --border: #191e2e;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Exo 2', sans-serif;
+  min-height: 100vh; overflow-x: hidden;
+}
+
+/* ── BG ── */
+.grid-bg {
+  position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.03;
+  background-image: linear-gradient(var(--accent) 1px, transparent 1px), linear-gradient(90deg, var(--accent) 1px, transparent 1px);
+  background-size:50px 50px;
+}
+.glow { position:fixed; border-radius:50%; filter:blur(140px); pointer-events:none; z-index:0; }
+.glow.a { width:600px; height:600px; background:#00e5ff08; top:-250px; left:-200px; }
+.glow.b { width:500px; height:500px; background:#7c4dff06; bottom:-200px; right:-200px; }
+
+/* ── HEADER ── */
+header {
+  position:relative; z-index:10;
+  padding:16px 28px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  background: var(--bg-card);
+}
+.logo { display:flex; align-items:center; gap:12px; }
+.logo-icon {
+  width:36px; height:36px; border:1.5px solid var(--accent); border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--accent); font-family:'Share Tech Mono',monospace; font-size:16px; font-weight:700;
+  background:var(--accent-glow); box-shadow:0 0 14px var(--accent-glow);
+}
+.logo-text { display:flex; flex-direction:column; }
+.logo-title { font-family:'Orbitron',sans-serif; font-size:17px; font-weight:600; letter-spacing:2px; }
+.logo-title span { color:var(--accent); }
+.logo-sub { font-size:10px; color:var(--text-dim); letter-spacing:1px; font-style:italic; font-weight:300; }
+.server-status { display:flex; align-items:center; gap:8px; }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
+.dot.online { background:var(--success); box-shadow:0 0 8px var(--success); }
+.server-status span { font-size:11px; color:var(--text-dim); }
+
+/* ── MAIN ── */
+.main { position:relative; z-index:5; max-width:900px; margin:0 auto; padding:30px 20px; }
+
+/* ── SECTION LABEL ── */
+.sec-label {
+  font-family:'Orbitron',sans-serif; font-size:9px; font-weight:600;
+  letter-spacing:3px; color:var(--accent); text-transform:uppercase;
+  margin-bottom:12px; display:flex; align-items:center; gap:10px;
+}
+.sec-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* ── CARD ── */
+.card {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:12px; padding:20px; margin-bottom:20px;
+}
+
+/* ── INPUTS ── */
+.row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.input-group { flex:1; min-width:160px; display:flex; flex-direction:column; gap:5px; }
+.input-group label { font-size:10px; font-weight:600; color:var(--text-dim); letter-spacing:1.2px; text-transform:uppercase; }
+.input-group input {
+  background:var(--bg-input); border:1px solid var(--border); border-radius:8px;
+  padding:9px 12px; color:var(--text); font-family:'Share Tech Mono',monospace; font-size:12px;
+  outline:none; transition:0.2s;
+}
+.input-group input:focus { border-color:var(--accent); box-shadow:0 0 10px var(--accent-glow); }
+.input-group input::placeholder { color:#2a3040; }
+
+/* ── BUTTONS ── */
+.btn {
+  font-family:'Exo 2',sans-serif; font-weight:600; border:none;
+  border-radius:8px; cursor:pointer; transition:0.2s; outline:none;
+}
+.btn-primary {
+  background:linear-gradient(135deg,var(--accent),#00b0cc);
+  color:#07080e; padding:9px 20px; font-size:14px;
+  box-shadow:0 4px 18px var(--accent-glow);
+}
+.btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 24px var(--accent-glow); }
+.btn-primary:disabled { opacity:0.35; cursor:default; transform:none; box-shadow:none; }
+
+.btn-success {
+  background:transparent; border:1px solid var(--success);
+  color:var(--success); padding:9px 18px; font-size:13px;
+}
+.btn-success:hover { background:#00e67610; }
+.btn-success:disabled { opacity:0.3; cursor:default; }
+
+.btn-ghost {
+  background:transparent; border:1px solid var(--border);
+  color:var(--text); padding:9px 16px; font-size:12px;
+}
+.btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+
+/* ── FILE LIST ── */
+.file-list { display:flex; flex-direction:column; gap:6px; max-height:420px; overflow-y:auto; padding-right:4px; }
+.file-list::-webkit-scrollbar { width:4px; }
+.file-list::-webkit-scrollbar-track { background:transparent; }
+.file-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+.file-card {
+  background:var(--bg-input); border:1px solid var(--border); border-radius:9px;
+  padding:10px 14px; display:flex; align-items:center; gap:12px; transition:0.2s;
+}
+.file-card:hover { border-color:#2a3348; }
+
+.file-ext {
+  font-family:'Share Tech Mono',monospace; font-size:10px; font-weight:700;
+  padding:3px 7px; border-radius:5px; min-width:42px; text-align:center; white-space:nowrap;
+}
+.ext-lua { background:#1a3d2b; color:var(--success); border:1px solid #00e67630; }
+.ext-rs  { background:#3d1a1a; color:#ff7043; border:1px solid #ff704330; }
+.ext-js  { background:#3d3520; color:var(--warning); border:1px solid #ffab4030; }
+.ext-toml{ background:#2a2040; color:var(--accent2); border:1px solid #7c4dff30; }
+.ext-other{ background:#1e1e2e; color:var(--text-dim); border:1px solid var(--border); }
+
+.file-info { flex:1; min-width:0; }
+.file-name { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Share Tech Mono',monospace; }
+.file-meta { font-size:10px; color:var(--text-dim); margin-top:2px; }
+
+.file-status {
+  font-size:10px; font-weight:600; letter-spacing:0.8px; padding:3px 9px;
+  border-radius:10px; white-space:nowrap; text-transform:uppercase;
+}
+.status-pending   { background:#1e1e2e; color:var(--text-dim); }
+.status-pure      { background:#1a3d2b; color:var(--success); }
+.status-fetching  { background:#1a2e3d; color:var(--accent); }
+.status-converting{ background:#2e1a3d; color:var(--accent2); }
+.status-done      { background:#1a3d2b; color:var(--success); }
+.status-error     { background:#3d1a1a; color:var(--error); }
+
+.pulse { animation: pulse 1.4s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+.file-actions { display:flex; gap:5px; }
+.btn-sm {
+  padding:4px 9px; font-size:10px; border-radius:5px; font-weight:600;
+  background:var(--bg-card); border:1px solid var(--border); color:var(--text);
+  font-family:'Exo 2',sans-serif; cursor:pointer; transition:0.2s;
+}
+.btn-sm:hover { border-color:var(--accent); color:var(--accent); }
+.btn-sm.dl { color:var(--success); border-color:#00e67630; }
+.btn-sm.dl:hover { border-color:var(--success); background:#00e67610; }
+
+/* ── TOOLBAR ── */
+.toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
+.toolbar-info { font-size:11px; color:var(--text-dim); margin-left:auto; }
+
+/* ── STATS ── */
+.stats { display:flex; gap:12px; margin-top:16px; flex-wrap:wrap; }
+.stat-card {
+  flex:1; min-width:100px;
+  background:var(--bg-input); border:1px solid var(--border); border-radius:8px;
+  padding:10px 14px;
+}
+.stat-val { font-family:'Orbitron',sans-serif; font-size:20px; font-weight:700; }
+.stat-val.cyan { color:var(--accent); }
+.stat-val.green { color:var(--success); }
+.stat-val.purple { color:var(--accent2); }
+.stat-val.orange { color:var(--warning); }
+.stat-label { font-size:9px; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase; margin-top:3px; }
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align:center; padding:40px 20px; color:var(--text-dim);
+}
+.empty-state .icon { font-size:32px; opacity:0.4; margin-bottom:10px; }
+.empty-state p { font-size:13px; }
+
+/* ── TOAST ── */
+.toast {
+  position:fixed; bottom:24px; right:24px; z-index:100;
+  background:#1a1f2e; border:1px solid var(--border); border-radius:10px;
+  padding:12px 18px; max-width:320px; font-size:13px;
+  box-shadow:0 8px 32px #00000050;
+  transform:translateY(120%); transition:transform 0.3s cubic-bezier(.4,0,.2,1); display:flex; gap:10px; align-items:flex-start;
+}
+.toast.show { transform:translateY(0); }
+.toast .t-icon { font-size:16px; flex-shrink:0; }
+.toast .t-msg { line-height:1.4; }
+.toast.error { border-color:#ff525240; }
+.toast.error .t-icon { color:var(--error); }
+.toast.success { border-color:#00e67640; }
+.toast.success .t-icon { color:var(--success); }
+.toast.info { border-color:var(--accent-glow); }
+.toast.info .t-icon { color:var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="glow a"></div>
+<div class="glow b"></div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">L</div>
+    <div class="logo-text">
+      <div class="logo-title">Lua<span>Pure</span></div>
+      <div class="logo-sub">AI-powered Lua converter</div>
+    </div>
+  </div>
+  <div class="server-status">
+    <div class="dot" id="serverDot"></div>
+    <span id="serverText">Checking server...</span>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- CONFIG -->
+  <div class="sec-label">GitHub Repository</div>
+  <div class="card">
+    <div class="row">
+      <div class="input-group">
+        <label>Owner</label>
+        <input type="text" id="inputOwner" placeholder="PY44N">
+      </div>
+      <div class="input-group">
+        <label>Repository</label>
+        <input type="text" id="inputRepo" placeholder="LuaObfuscatorV2">
+      </div>
+      <div class="input-group" style="flex:0.5; min-width:100px;">
+        <label>Branch</label>
+        <input type="text" id="inputBranch" placeholder="main">
+      </div>
+      <button class="btn btn-primary" id="btnFetch">Fetch Files</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats" id="statsWrap" style="display:none;">
+    <div class="stat-card">
+      <div class="stat-val cyan" id="statTotal">0</div>
+      <div class="stat-label">Total Files</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val green" id="statPure">0</div>
+      <div class="stat-label">Already Lua</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val purple" id="statNeed">0</div>
+      <div class="stat-label">Need Convert</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val green" id="statDone">0</div>
+      <div class="stat-label">Converted</div>
+    </div>
+  </div>
+
+  <!-- FILE LIST -->
+  <div class="sec-label" style="margin-top:22px;">Files</div>
+  <div class="card" style="padding:16px;">
+    <div class="file-list" id="fileList">
+      <div class="empty-state">
+        <div class="icon">📂</div>
+        <p>Enter a GitHub repo above and click <strong>Fetch Files</strong></p>
+      </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar" id="toolbar" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+      <button class="btn btn-primary" id="btnConvertAll" disabled>⚡ Convert All</button>
+      <button class="btn btn-success" id="btnDownloadAll" disabled>⬇ Download All as ZIP</button>
+      <span class="toolbar-info" id="toolbarInfo"></span>
+    </div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="t-icon" id="toastIcon">ℹ</div>
+  <div class="t-msg" id="toastMsg"></div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────
+let files = []; // { path, size, ext, status, content, convertedCode }
+let toastTimer = null;
+
+// ──────────────────────────────────────────────
+// TOAST
+// ──────────────────────────────────────────────
+function showToast(msg, type = "info") {
+  const toast = document.getElementById("toast");
+  const icon = document.getElementById("toastIcon");
+  const msgEl = document.getElementById("toastMsg");
+
+  toast.className = "toast " + type;
+  icon.textContent = type === "error" ? "✕" : type === "success" ? "✓" : "ℹ";
+  msgEl.textContent = msg;
+  toast.classList.add("show");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 3500);
+}
+
+// ──────────────────────────────────────────────
+// SERVER HEALTH CHECK
+// ──────────────────────────────────────────────
+async function checkServer() {
+  try {
+    const res = await fetch("/api/health");
+    const data = await res.json();
+    document.getElementById("serverDot").classList.add("online");
+    document.getElementById("serverText").textContent = data.groqConfigured ? "Server online · Groq ready" : "Server online · Groq NOT configured";
+  } catch {
+    document.getElementById("serverText").textContent = "Server offline";
+  }
+}
+checkServer();
+
+// ──────────────────────────────────────────────
+// GET EXTENSION
+// ──────────────────────────────────────────────
+function getExt(path) {
+  const parts = path.split(".");
+  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "none";
+}
+
+function getExtClass(ext) {
+  if (ext === "lua") return "ext-lua";
+  if (ext === "rs")  return "ext-rs";
+  if (ext === "js" || ext === "json") return "ext-js";
+  if (ext === "toml") return "ext-toml";
+  return "ext-other";
+}
+
+function getLangName(ext) {
+  const map = { rs:"Rust", js:"JavaScript", json:"JSON", toml:"TOML", ts:"TypeScript", py:"Python", cpp:"C++", c:"C", java:"Java", rb:"Ruby", go:"Go", sh:"Shell", md:"Markdown", yml:"YAML", yaml:"YAML", xml:"XML", html:"HTML", css:"CSS", lock:"Lock file" };
+  return map[ext] || ext.toUpperCase();
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / 1048576).toFixed(1) + " MB";
+}
+
+// ──────────────────────────────────────────────
+// RENDER FILE LIST
+// ──────────────────────────────────────────────
+function renderFiles() {
+  const list = document.getElementById("fileList");
+  if (files.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">📂</div><p>No files found</p></div>';
+    return;
+  }
+
+  list.innerHTML = files.map((f, i) => {
+    const ext = f.ext;
+    const isPureLua = ext === "lua";
+    const statusClass = f.status === "pending" ? (isPureLua ? "status-pure" : "status-pending") : "status-" + f.status;
+    const statusLabel = f.status === "pending" ? (isPureLua ? "Pure Lua" : "Pending") : f.status.charAt(0).toUpperCase() + f.status.slice(1);
+    const pulseClass = (f.status === "fetching" || f.status === "converting") ? " pulse" : "";
+
+    let actions = "";
+    if (f.status === "done" || isPureLua) {
+      actions = `<button class="btn-sm dl" onclick="downloadFile(${i})">⬇ Save</button>`;
+    }
+    if (f.status === "error") {
+      actions = `<button class="btn-sm" onclick="convertSingle(${i})">↻ Retry</button>`;
+    }
+
+    return `
+      <div class="file-card">
+        <div class="file-ext ${getExtClass(ext)}">${ext || "?"}</div>
+        <div class="file-info">
+          <div class="file-name">${f.path}</div>
+          <div class="file-meta">${getLangName(ext)} · ${formatBytes(f.size)}</div>
+        </div>
+        <div class="file-status ${statusClass}${pulseClass}">${statusLabel}</div>
+        <div class="file-actions">${actions}</div>
+      </div>`;
+  }).join("");
+
+  updateStats();
+}
+
+// ──────────────────────────────────────────────
+// UPDATE STATS & TOOLBAR
+// ──────────────────────────────────────────────
+function updateStats() {
+  const total = files.length;
+  const pure = files.filter(f => f.ext === "lua").length;
+  const needConvert = files.filter(f => f.ext !== "lua").length;
+  const done = files.filter(f => f.status === "done").length;
+
+  document.getElementById("statTotal").textContent = total;
+  document.getElementById("statPure").textContent = pure;
+  document.getElementById("statNeed").textContent = needConvert;
+  document.getElementById("statDone").textContent = done;
+  document.getElementById("statsWrap").style.display = "flex";
+  document.getElementById("toolbar").style.display = "flex";
+
+  const allConverted = needConvert > 0 && done === needConvert;
+  const anyConvertible = needConvert > 0;
+  const isProcessing = files.some(f => f.status === "fetching" || f.status === "converting");
+
+  document.getElementById("btnConvertAll").disabled = !anyConvertible || isProcessing;
+  document.getElementById("btnDownloadAll").disabled = !allConverted && done === 0 && pure === 0;
+  document.getElementById("toolbarInfo").textContent = isProcessing ? "Processing..." : `${done}/${needConvert} converted`;
+}
+
+// ──────────────────────────────────────────────
+// FETCH FILES FROM GITHUB
+// ──────────────────────────────────────────────
+document.getElementById("btnFetch").addEventListener("click", async () => {
+  const owner = document.getElementById("inputOwner").value.trim();
+  const repo  = document.getElementById("inputRepo").value.trim();
+  const branch = document.getElementById("inputBranch").value.trim() || "main";
+
+  if (!owner || !repo) { showToast("Enter owner and repo name", "error"); return; }
+
+  document.getElementById("btnFetch").disabled = true;
+  document.getElementById("btnFetch").textContent = "Fetching...";
+  showToast("Fetching files from GitHub...", "info");
+
+  try {
+    const res = await fetch(`/api/repo-files?owner=${owner}&repo=${repo}&branch=${branch}`);
+    if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+    const data = await res.json();
+
+    files = data.files.map(f => ({
+      path: f.path,
+      size: f.size,
+      ext: getExt(f.path),
+      status: "pending",
+      content: null,
+      convertedCode: null
+    }));
+
+    renderFiles();
+    showToast(`Fetched ${files.length} files from ${owner}/${repo}`, "success");
+  } catch (err) {
+    showToast("Failed: " + err.message, "error");
+  }
+
+  document.getElementById("btnFetch").disabled = false;
+  document.getElementById("btnFetch").textContent = "Fetch Files";
+});
+
+// ──────────────────────────────────────────────
+// FETCH SINGLE FILE CONTENT
+// ──────────────────────────────────────────────
+async function fetchContent(index) {
+  const f = files[index];
+  const owner = document.getElementById("inputOwner").value.trim();
+  const repo  = document.getElementById("inputRepo").value.trim();
+
+  f.status = "fetching";
+  renderFiles();
+
+  const res = await fetch(`/api/file-content?owner=${owner}&repo=${repo}&path=${encodeURIComponent(f.path)}`);
+  if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+  const data = await res.json();
+  f.content = data.content;
+}
+
+// ──────────────────────────────────────────────
+// CONVERT SINGLE FILE
+// ──────────────────────────────────────────────
+async function convertSingle(index) {
+  const f = files[index];
+  try {
+    if (!f.content) await fetchContent(index);
+
+    f.status = "converting";
+    renderFiles();
+
+    const res = await fetch("/api/convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filePath: f.path, code: f.content, originalLang: getLangName(f.ext) })
+    });
+
+    if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+    const data = await res.json();
+
+    f.convertedCode = data.convertedCode;
+    f.status = "done";
+  } catch (err) {
+    f.status = "error";
+    f.errorMsg = err.message;
+    showToast("Failed converting " + f.path + ": " + err.message, "error");
+  }
+  renderFiles();
+}
+
+// ──────────────────────────────────────────────
+// CONVERT ALL NON-LUA FILES
+// ──────────────────────────────────────────────
+document.getElementById("btnConvertAll").addEventListener("click", async () => {
+  const toConvert = files.filter(f => f.ext !== "lua" && f.status !== "done");
+  if (toConvert.length === 0) { showToast("Nothing to convert", "info"); return; }
+
+  document.getElementById("btnConvertAll").disabled = true;
+  showToast(`Converting ${toConvert.length} file(s)...`, "info");
+
+  for (let i = 0; i < files.length; i++) {
+    if (files[i].ext !== "lua" && files[i].status !== "done") {
+      await convertSingle(i);
+    }
+  }
+
+  document.getElementById("btnConvertAll").disabled = false;
+  const doneCount = files.filter(f => f.status === "done").length;
+  showToast(`Conversion complete! ${doneCount} files converted.`, "success");
+});
+
+// ──────────────────────────────────────────────
+// DOWNLOAD SINGLE FILE
+// ──────────────────────────────────────────────
+function downloadFile(index) {
+  const f = files[index];
+  const code = f.ext === "lua" ? f.content : f.convertedCode;
+  if (!code) { showToast("No content to download", "error"); return; }
+
+  // Change extension to .lua
+  const newPath = f.path.replace(/\.[^.]+$/, ".lua");
+  const fileName = newPath.split("/").pop();
+  const blob = new Blob([code], { type: "text/plain" });
+  saveAs(blob, fileName);
+}
+
+// ──────────────────────────────────────────────
+// DOWNLOAD ALL AS ZIP
+// ──────────────────────────────────────────────
+document.getElementById("btnDownloadAll").addEventListener("click", async () => {
+  const zip = new JSZip();
+  let count = 0;
+
+  // First fetch content for pure .lua files that haven't been fetched yet
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    if (f.ext === "lua" && !f.content) {
+      try { await fetchContent(i); } catch(e) { /* skip */ }
+      renderFiles();
+    }
+  }
+
+  files.forEach(f => {
+    let code = null;
+    let outPath = f.path.replace(/\.[^.]+$/, ".lua");
+
+    if (f.ext === "lua" && f.content) {
+      code = f.content;
+    } else if (f.status === "done" && f.convertedCode) {
+      code = f.convertedCode;
+    }
+
+    if (code) {
+      zip.file(outPath, code);
+      count++;
+    }
+  });
+
+  if (count === 0) { showToast("No files to download yet", "error"); return; }
+
+  const owner = document.getElementById("inputOwner").value.trim();
+  const repo  = document.getElementById("inputRepo").value.trim();
+  const blob = await zip.generateAsync({ type: "blob" });
+  saveAs(blob, `${repo}_pure_lua.zip`);
+  showToast(`Downloaded ${count} files as ZIP`, "success");
+});
+</script>
+</body>
+</html>
