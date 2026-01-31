@@ -239,22 +239,14 @@ header {
 <div class="main">
 
   <!-- CONFIG -->
-  <div class="sec-label">GitHub Repository</div>
+  <div class="sec-label">Repository Files</div>
   <div class="card">
-    <div class="row">
-      <div class="input-group">
-        <label>Owner</label>
-        <input type="text" id="inputOwner" placeholder="PY44N">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+      <div>
+        <div style="font-family:'Share Tech Mono',monospace; font-size:16px; color:var(--accent); font-weight:600;">LuaObfuscatorV2 — Local Files</div>
+        <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Scanning repository directory</div>
       </div>
-      <div class="input-group">
-        <label>Repository</label>
-        <input type="text" id="inputRepo" placeholder="LuaObfuscatorV2">
-      </div>
-      <div class="input-group" style="flex:0.5; min-width:100px;">
-        <label>Branch</label>
-        <input type="text" id="inputBranch" placeholder="main">
-      </div>
-      <button class="btn btn-primary" id="btnFetch">Fetch Files</button>
+      <button class="btn btn-primary" id="btnFetch" style="flex-shrink:0;">🔄 Refresh Files</button>
     </div>
   </div>
 
@@ -436,21 +428,15 @@ function updateStats() {
 }
 
 // ──────────────────────────────────────────────
-// FETCH FILES FROM GITHUB
+// FETCH FILES FROM LOCAL REPO
 // ──────────────────────────────────────────────
-document.getElementById("btnFetch").addEventListener("click", async () => {
-  const owner = document.getElementById("inputOwner").value.trim();
-  const repo  = document.getElementById("inputRepo").value.trim();
-  const branch = document.getElementById("inputBranch").value.trim() || "main";
-
-  if (!owner || !repo) { showToast("Enter owner and repo name", "error"); return; }
-
+async function fetchRepoFiles() {
   document.getElementById("btnFetch").disabled = true;
-  document.getElementById("btnFetch").textContent = "Fetching...";
-  showToast("Fetching files from GitHub...", "info");
+  document.getElementById("btnFetch").textContent = "Scanning...";
+  showToast("Scanning local repository files...", "info");
 
   try {
-    const res = await fetch(`/api/repo-files?owner=${owner}&repo=${repo}&branch=${branch}`);
+    const res = await fetch(`/api/repo-files`);
     if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
     const data = await res.json();
 
@@ -464,13 +450,20 @@ document.getElementById("btnFetch").addEventListener("click", async () => {
     }));
 
     renderFiles();
-    showToast(`Fetched ${files.length} files from ${owner}/${repo}`, "success");
+    showToast(`Found ${files.length} files in repository`, "success");
   } catch (err) {
     showToast("Failed: " + err.message, "error");
   }
 
   document.getElementById("btnFetch").disabled = false;
-  document.getElementById("btnFetch").textContent = "Fetch Files";
+  document.getElementById("btnFetch").textContent = "🔄 Refresh Files";
+}
+
+document.getElementById("btnFetch").addEventListener("click", fetchRepoFiles);
+
+// Auto-fetch on page load
+window.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => fetchRepoFiles(), 500);
 });
 
 // ──────────────────────────────────────────────
@@ -478,13 +471,11 @@ document.getElementById("btnFetch").addEventListener("click", async () => {
 // ──────────────────────────────────────────────
 async function fetchContent(index) {
   const f = files[index];
-  const owner = document.getElementById("inputOwner").value.trim();
-  const repo  = document.getElementById("inputRepo").value.trim();
 
   f.status = "fetching";
   renderFiles();
 
-  const res = await fetch(`/api/file-content?owner=${owner}&repo=${repo}&path=${encodeURIComponent(f.path)}`);
+  const res = await fetch(`/api/file-content?path=${encodeURIComponent(f.path)}`);
   if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
   const data = await res.json();
   f.content = data.content;
@@ -590,10 +581,8 @@ document.getElementById("btnDownloadAll").addEventListener("click", async () => 
 
   if (count === 0) { showToast("No files to download yet", "error"); return; }
 
-  const owner = document.getElementById("inputOwner").value.trim();
-  const repo  = document.getElementById("inputRepo").value.trim();
   const blob = await zip.generateAsync({ type: "blob" });
-  saveAs(blob, `${repo}_pure_lua.zip`);
+  saveAs(blob, `LuaObfuscatorV2_pure_lua.zip`);
   showToast(`Downloaded ${count} files as ZIP`, "success");
 });
 </script>
